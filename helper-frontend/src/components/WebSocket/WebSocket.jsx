@@ -16,14 +16,14 @@ const WebSocketChat = () => {
 
         socket.onopen = () => console.log('Connected to WebSocket');
         socket.onmessage = (event) => {
-            const data=JSON.parse(event.data)
+            const data = JSON.parse(event.data)
 
             if (data.type === 'history') {
-                if(data.messages)
-                setMessages(data.messages.map(msg => ({
-                    sender: msg.role === 'user' ? 'You' : 'Homework Helper',
-                    text: msg.content
-                })));
+                if (data.messages)
+                    setMessages(data.messages.map(msg => ({
+                        sender: msg.role === 'user' ? 'You' : 'Homework Helper',
+                        text: msg.content
+                    })));
             } else if (data.type === 'message') {
                 setMessages(prev => [...prev, { sender: data.sender, text: data.text }]);
             }
@@ -82,6 +82,11 @@ const WebSocketChat = () => {
             <h2 className="chat-title">Homework Helper</h2>
             <div className="chat-box">
                 <div className="messages-container">
+                    {messages.length === 0 && (
+                        <div className="empty-chat-message">
+                            Please ask me anything
+                        </div>
+                    )}
                     {messages.map((msg, index) => (
                         <div key={index} className={`message ${msg.sender === 'You' ? 'you' : 'ai'}`}>
                             <strong>{msg.sender}</strong>
@@ -110,7 +115,7 @@ const WebSocketChat = () => {
                     onKeyDown={handleKeyDown}
                     className="input-box"
                 />
-                <button onClick={sendMessage} className="send-button">Send</button>
+                <button onClick={sendMessage} className="send-button" disabled={isTyping}>Send</button>
             </div>
         </div>
     );
