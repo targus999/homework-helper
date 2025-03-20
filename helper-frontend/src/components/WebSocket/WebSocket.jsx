@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './WebSocket.css';
 
+
 const WebSocketChat = () => {
     const [message, setMessage] = useState('');
     const [messages, setMessages] = useState([]);
@@ -15,8 +16,16 @@ const WebSocketChat = () => {
 
         socket.onopen = () => console.log('Connected to WebSocket');
         socket.onmessage = (event) => {
-            setIsTyping(false);
-            setMessages((prev) => [...prev, { sender: 'Homework Helper', text: event.data }]);
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'history') {
+                setMessages(data.messages.map(msg => ({
+                    sender: msg.role === 'user' ? 'You' : 'Homework Helper',
+                    text: msg.content
+                })));
+            } else if (data.type === 'message') {
+                setMessages(prev => [...prev, { sender: data.sender, text: data.text }]);
+            }
         };
 
         socket.onclose = () => console.log('WebSocket disconnected');

@@ -1,5 +1,12 @@
 const { WebSocketServer } = require('ws');
 const axios = require('axios');
+const Redis = require('ioredis');
+
+const redis = new Redis({
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: process.env.REDIS_PORT || 6379,
+    password: process.env.REDIS_PASSWORD,  
+});
 
 function setupWebSocket(server) {
     console.log("Socket connection waiting...");
@@ -15,16 +22,28 @@ function setupWebSocket(server) {
     // Store session history for each client connection
     const sessionHistory = new Map();
 
-    wss.on('connection', (ws) => {
+    wss.on('connection', async(ws) => {
         console.log('Client connected');
-        sessionHistory.set(ws, []); // Initialize empty history for new client
+         // Generate a unique session key (can be improved with user authentication)
+         const sessionId = `session:${ws._socket.remoteAddress}`;
+
+         // Retrieve chat history from Redis and send to the client
+         const historyString = await redis.get(sessionId);
+         const history = historyString ? JSON.parse(historyString) : [];
+ 
+         ws.send(JSON.stringify({ type: 'history', messages: history }));
+
 
         ws.on('message', async (message) => {
             const userMessage = message.toString();
             console.log('Received:', userMessage);
 
-            // Retrieve chat history for this session
-            const history = sessionHistory.get(ws) || [];
+            // Generate a unique session key (e.g., using WebSocket object)
+            const sessionId = `session:${ws._socket.remoteAddress}`;
+
+            // Retrieve chat history from Redis
+            const historyString = await redis.get(sessionId);
+            const history = historyString ? JSON.parse(historyString) : [];
 
             // System context to guide without giving answers
             const homeworkContext = "Introduce yourself as Homework helper who helps students understand homework by asking guiding questions and providing hints. Do not give direct answers.";
@@ -54,8 +73,8 @@ function setupWebSocket(server) {
                 // Append AI response to history
                 history.push({ role: 'assistant', content: aiMessage });
 
-                // Update session history
-                sessionHistory.set(ws, history);
+                // Store updated history in Redis (expire after 5min)
+                await redis.setex(sessionId, 300, JSON.stringify(history));
 
                 ws.send(aiMessage);
             } catch (error) {
