@@ -5,7 +5,7 @@ const Redis = require('ioredis');
 const redis = new Redis({
     host: process.env.REDIS_HOST || '127.0.0.1',
     port: process.env.REDIS_PORT || 6379,
-    password: process.env.REDIS_PASSWORD,  
+    password: process.env.REDIS_PASSWORD,
 });
 
 function setupWebSocket(server) {
@@ -22,28 +22,38 @@ function setupWebSocket(server) {
     // Store session history for each client connection
     const sessionHistory = new Map();
 
-    wss.on('connection', async(ws) => {
+    wss.on('connection', async (ws) => {
         console.log('Client connected');
-         // Generate a unique session key (can be improved with user authentication)
-         const sessionId = `session:${ws._socket.remoteAddress}`;
+        // Generate a unique session key (can be improved with user authentication)
+        const sessionId = `session:${ws._socket.remoteAddress}`;
+        // Retrieve chat history from Redis and send to the client
+        const historyString = await redis.get(sessionId);
+        let history;
 
-         // Retrieve chat history from Redis and send to the client
-         const historyString = await redis.get(sessionId);
-         const history = historyString ? JSON.parse(historyString) : [];
- 
-         ws.send(JSON.stringify({ type: 'history', messages: history }));
+        try {
+            history = historyString ? JSON.parse(historyString) : [];
+        } catch (error) {
+            console.error('Error parsing Redis history:', error);
+            history = []; // Default to empty array if parsing fails
+        }
+
+        ws.send(JSON.stringify({ type: 'history', messages: history }));
 
 
         ws.on('message', async (message) => {
             const userMessage = message.toString();
             console.log('Received:', userMessage);
 
-            // Generate a unique session key (e.g., using WebSocket object)
-            const sessionId = `session:${ws._socket.remoteAddress}`;
-
-            // Retrieve chat history from Redis
+            // Retrieve chat history from Redis and send to the client
             const historyString = await redis.get(sessionId);
-            const history = historyString ? JSON.parse(historyString) : [];
+            let history;
+
+            try {
+                history = historyString ? JSON.parse(historyString) : [];
+            } catch (error) {
+                console.error('Error parsing Redis history:', error);
+                history = []; // Default to empty array if parsing fails
+            }
 
             // System context to guide without giving answers
             const homeworkContext = "Introduce yourself as Homework helper who helps students understand homework by asking guiding questions and providing hints. Do not give direct answers.";
@@ -72,11 +82,11 @@ function setupWebSocket(server) {
 
                 // Append AI response to history
                 history.push({ role: 'assistant', content: aiMessage });
-
+                ws.send(JSON.stringify({ type: 'message', sender: 'Homework Helper', text: aiMessage }));
                 // Store updated history in Redis (expire after 5min)
-                await redis.setex(sessionId, 300, JSON.stringify(history));
+                redis.setex(sessionId, 300, JSON.stringify(history));
 
-                ws.send(aiMessage);
+
             } catch (error) {
                 console.error('Error:', error.message);
                 ws.send('Error processing request');

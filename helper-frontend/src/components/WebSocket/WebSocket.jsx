@@ -12,13 +12,14 @@ const WebSocketChat = () => {
     const [typingDots, setTypingDots] = useState('');
 
     useEffect(() => {
-        const socket = new WebSocket('ws://localhost:5000');
+        const socket = new WebSocket(process.env.REACT_APP_WS_URL);
 
         socket.onopen = () => console.log('Connected to WebSocket');
         socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+            const data=JSON.parse(event.data)
 
             if (data.type === 'history') {
+                if(data.messages)
                 setMessages(data.messages.map(msg => ({
                     sender: msg.role === 'user' ? 'You' : 'Homework Helper',
                     text: msg.content
@@ -26,6 +27,7 @@ const WebSocketChat = () => {
             } else if (data.type === 'message') {
                 setMessages(prev => [...prev, { sender: data.sender, text: data.text }]);
             }
+            setIsTyping(false);
         };
 
         socket.onclose = () => console.log('WebSocket disconnected');
