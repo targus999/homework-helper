@@ -27,7 +27,7 @@ function setupWebSocket(server) {
             const history = sessionHistory.get(ws) || [];
 
             // System context to guide without giving answers
-            const homeworkContext = "You are a tutor who helps students understand homework by asking guiding questions and providing hints. Do not give direct answers.";
+            const homeworkContext = "Introduce yourself as Homework helper who helps students understand homework by asking guiding questions and providing hints. Do not give direct answers.";
 
             // Append user message to history
             history.push({ role: 'user', content: userMessage });
@@ -50,7 +50,6 @@ function setupWebSocket(server) {
                 );
 
                 const aiMessage = response.data.choices[0].message.content;
-                console.log(aiMessage);
 
                 // Append AI response to history
                 history.push({ role: 'assistant', content: aiMessage });
