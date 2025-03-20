@@ -6,14 +6,8 @@ const https = require('https');
 
 const app = express();
 
-// Detect if running in Railway (HTTPS) and adjust protocol
-if (process.env.RAILWAY_STATIC_URL) {
-    server = https.createServer(app);
-    console.log("Running with HTTPS");
-} else {
+
     server = createServer(app);
-    console.log("Running with HTTP");
-}
 
 setupWebSocket(server);
 
