@@ -1,29 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { FaPaperPlane, FaUpload, FaTimes } from 'react-icons/fa';
 import './WebSocket.css';
-
 
 const WebSocketChat = () => {
     const [message, setMessage] = useState('');
     const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
     const [ws, setWs] = useState(null);
+    const [filePreview, setFilePreview] = useState(null);
+    const [selectedFile, setSelectedFile] = useState(null);
     const messagesEndRef = useRef(null);
-    const [typingDots, setTypingDots] = useState('');
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         const socket = new WebSocket(process.env.REACT_APP_WS_URL);
 
         socket.onopen = () => console.log('Connected to WebSocket');
         socket.onmessage = (event) => {
-            const data = JSON.parse(event.data)
-
+            console.log(event.data)
+            const data = JSON.parse(event.data);
             if (data.type === 'history') {
-                if (data.messages)
-                    setMessages(data.messages.map(msg => ({
-                        sender: msg.role === 'user' ? 'You' : 'Homework Helper',
-                        text: msg.content
-                    })));
+                setMessages(data.messages.map(msg => ({
+                    sender: msg.role === 'user' ? 'You' : 'Homework Helper',
+                    text: msg.text
+                })));
             } else if (data.type === 'message') {
                 setMessages(prev => [...prev, { sender: data.sender, text: data.text }]);
             }
@@ -34,7 +35,6 @@ const WebSocketChat = () => {
         socket.onerror = (error) => console.error('WebSocket error:', error);
 
         setWs(socket);
-
         return () => socket.close();
     }, []);
 
@@ -42,71 +42,131 @@ const WebSocketChat = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isTyping]);
 
-    useEffect(() => {
-        if (isTyping) {
-            const interval = setInterval(() => {
-                setTypingDots((prev) => (prev.length < 3 ? prev + '.' : ''));
-            }, 500);
-            return () => clearInterval(interval);
-        }
-    }, [isTyping]);
-
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            if (e.shiftKey) {
-                // Allow new line
-                setMessage((prev) => prev + '\n');
-            } else {
-                // Prevent default Enter behavior (so it doesn't add a newline)
-                e.preventDefault();
-                sendMessage();
-            }
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
         }
     };
 
     const sendMessage = () => {
-        if (ws && message.trim() !== '') {
-            ws.send(message);
-            setMessages((prev) => [...prev, { sender: 'You', text: message }]);
-            setMessage('');
+        if (ws && (message.trim() !== '' || selectedFile)) {
+            const payload = [];
 
-            // Start typing indicator 1 second after sending message
-            setTimeout(() => {
-                setIsTyping(true);
-            }, 1000);
+            const sendPayload = () => {
+                if (payload.length > 0) {
+                    ws.send(JSON.stringify(payload));
+                    setMessages(prev => [
+                        ...prev,
+                        ...payload.map(item => ({
+                            sender: 'You',
+                            text: item.type === 'image_url' ? `📎 ${item.filename}` : item.content
+                        }))
+                    ]);
+                }
+                setMessage('');
+                setSelectedFile(null);
+                setTimeout(() => setIsTyping(true), 1000);
+            };
+
+            if (selectedFile) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64String = reader.result.split(',')[1];
+                    payload.push({ type: 'image_url', image_url: base64String });
+                    sendPayload();
+                };
+                reader.readAsDataURL(selectedFile);
+            }
+
+            if (message.trim() !== '') {
+                payload.push({ type: 'text', text: message });
+            }
+
+            if (!selectedFile) {
+                sendPayload();
+            }
+        }
+    };
+
+
+
+    const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        console.log(file)
+        if (file) {
+            setSelectedFile(file);
+            const reader = new FileReader();
+            reader.onload = (e) => setFilePreview(e.target.result);
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const removeSelectedFile = () => {
+        setSelectedFile(null);
+        setFilePreview(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ""; // Reset input value to allow re-selection of the same file
         }
     };
 
     return (
         <div className="chat-container">
-            <h2 className="chat-title">Homework Helper</h2>
+            <div className="chat-header">
+                <h2>Homework Helper</h2>
+            </div>
             <div className="chat-box">
                 <div className="messages-container">
-                    {messages.length === 0 && (
-                        <div className="empty-chat-message">
-                            Please ask me anything
-                        </div>
-                    )}
                     {messages.map((msg, index) => (
                         <div key={index} className={`message ${msg.sender === 'You' ? 'you' : 'ai'}`}>
-                            <strong>{msg.sender}</strong>
+                            <strong>{msg.sender} <br /></strong>
                             {msg.sender === 'Homework Helper' ? (
                                 <ReactMarkdown>{msg.text}</ReactMarkdown>
                             ) : (
-                                msg.text
+                                (() => {
+                                    try {
+                                        console.log(msg.text);
+                                        return msg.text.map((value, i) => (
+                                            <div key={i}>
+                                                {value.type === 'image_url' ? (
+                                                    <img
+                                                        src={`data:image/png;base64,${value.image_url}`}
+                                                        alt={'preview'}
+                                                        style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '5px' }}
+                                                    />
+                                                ) : (
+                                                    <span>{value.content}</span>
+                                                )}
+                                            </div>
+                                        ));
+                                    } catch (error) {
+                                        // If parsing fails, assume it's plain text
+                                        return <span>{msg.text}</span>;
+                                    }
+                                })()
                             )}
                         </div>
                     ))}
+
                     {isTyping && (
                         <div className="message ai typing-bubble">
-                            <strong>Homework Helper</strong>
-                            <span className="typing-dots">{typingDots || '.'}</span>
+                            <span className="typing-dots">...</span>
                         </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>
             </div>
             <div className="input-container">
+                {selectedFile && (
+                    <div className="file-preview" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <img
+                            src={filePreview}
+                            alt="preview"
+                            style={{ width: '50px', height: '50px', borderRadius: '5px' }}
+                        />
+                        <FaTimes className="remove-file" onClick={removeSelectedFile} style={{ cursor: 'pointer' }} />
+                    </div>
+                )}
                 <input
                     type="text"
                     value={message}
@@ -115,7 +175,20 @@ const WebSocketChat = () => {
                     onKeyDown={handleKeyDown}
                     className="input-box"
                 />
-                <button onClick={sendMessage} className="send-button" disabled={isTyping}>Send</button>
+                <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    ref={fileInputRef}
+                    className="file-upload"
+                    style={{ display: 'none' }}
+                    id="file-upload"
+                />
+                <label htmlFor="file-upload" className="upload-button">
+                    <FaUpload />
+                </label>
+                <button onClick={sendMessage} className="send-button" disabled={isTyping}>
+                    <FaPaperPlane />
+                </button>
             </div>
         </div>
     );

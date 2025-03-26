@@ -1,6 +1,7 @@
 const { WebSocketServer } = require('ws');
 const axios = require('axios');
 const Redis = require('ioredis');
+const Tesseract = require("tesseract.js");
 
 const redis = new Redis({
     host: process.env.REDIS_HOST || '127.0.0.1',
@@ -10,7 +11,7 @@ const redis = new Redis({
 
 function setupWebSocket(server) {
     console.log("Socket connection waiting...");
-    const wss = new WebSocketServer({ server, cors: { origin: "*" } });
+    const wss = new WebSocketServer({ server });
 
     const header = {
         headers: {
@@ -19,83 +20,110 @@ function setupWebSocket(server) {
         },
     };
 
-    // Store session history for each client connection
-    const sessionHistory = new Map();
-
-    wss.on('connection', async (ws) => {
+    wss.on('connection', async (ws, req) => {
         console.log('Client connected');
-        // Generate a unique session key (can be improved with user authentication)
-        const sessionId = `session:${ws._socket.remoteAddress}`;
-        // Retrieve chat history from Redis and send to the client
-        const historyString = await redis.get(sessionId);
-        let history;
+        const sessionId = `session:${req.socket.remoteAddress}`;
 
         try {
-            history = historyString ? JSON.parse(historyString) : [];
-        } catch (error) {
-            console.error('Error parsing Redis history:', error);
-            history = []; // Default to empty array if parsing fails
+            // Retrieve chat history from Redis
+            const historyString = await redis.get(sessionId);
+            let history = historyString ? JSON.parse(historyString) : [];
+
+            ws.send(JSON.stringify({ type: 'history', messages: history }));
+        } catch (err) {
+            console.error('Error retrieving history:', err);
         }
 
-        ws.send(JSON.stringify({ type: 'history', messages: history }));
-
-
         ws.on('message', async (message) => {
-            const userMessage = message.toString();
-            console.log('Received:', userMessage);
-
-            // Retrieve chat history from Redis and send to the client
-            const historyString = await redis.get(sessionId);
-            let history;
-
             try {
-                history = historyString ? JSON.parse(historyString) : [];
+                let parsedMessages;
+
+                try {
+                    parsedMessages = JSON.parse(message); // Expecting an array
+                    if (!Array.isArray(parsedMessages)) throw new Error();
+                } catch (err) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+                    return;
+                }
+
+                console.log('Received messages:', parsedMessages);
+
+                const historyString = await redis.get(sessionId);
+                let history = historyString ? JSON.parse(historyString) : [];
+
+                // Define the context for AI response
+                const homeworkContext = "Solve the problems.";
+
+                let extractedTexts = [];
+
+                // Process all messages
+                for (const msg of parsedMessages) {
+                    if (msg.type === 'text' && msg.text.trim() !== '') {
+                        history.push({ role: 'user', content: msg.text });
+                    }
+
+                    if (msg.type === 'image_url' && msg.image_url) {
+                        try {
+                            const imageDataUri = `data:image/webp;base64,${msg.image_url}`;
+                            console.log("Processing Image OCR...");
+                            const ocrResult = await Tesseract.recognize(imageDataUri, "eng");
+                            const extractedText = ocrResult.data.text.trim();
+                            
+                            console.log("Extracted Text:", extractedText);
+                            
+                            if (extractedText) {
+                                extractedTexts.push(extractedText);
+                                history.push({ role: 'user', content: extractedText });
+                            }
+                        } catch (err) {
+                            console.error("OCR Error:", err);
+                        }
+                    }
+                }
+
+                if (history.length > 10) history.shift(); // Keep last 10 messages
+
+                // **Wait until OCR extraction is done before calling AI API**
+                if (history.length > 0) {
+                    console.log('Sending to AI API:', history);
+
+                    // Format messages for OpenRouter
+                    const formattedMessages = [{ role: 'system', content: homeworkContext }, ...history];
+
+                    // Send to AI model
+                    const response = await axios.post(
+                        process.env.AI_API_URL,
+                        {
+                            model: 'google/gemma-3-12b-it:free',
+                            messages: formattedMessages,
+                        },
+                        header
+                    );
+
+                    console.log(response.data.choices);
+                    if (response.data && response.data.choices && response.data.choices.length > 0) {
+                        const aiMessage = response.data.choices[0].message.content;
+
+                        // Append AI response
+                        history.push({ role: 'assistant', content: aiMessage });
+
+                        ws.send(JSON.stringify({ type: 'message', sender: 'Homework Helper', text: aiMessage }));
+
+                        // Store updated history in Redis (expires after 5 min)
+                        await redis.setex(sessionId, 300, JSON.stringify(history));
+                    } else {
+                        console.error('Unexpected AI API response:', response.data);
+                        ws.send(JSON.stringify({ type: 'error', message: 'AI response error' }));
+                    }
+                }
             } catch (error) {
-                console.error('Error parsing Redis history:', error);
-                history = []; // Default to empty array if parsing fails
-            }
-
-            // System context to guide without giving answers
-            const homeworkContext = "Introduce yourself as Homework helper who helps students understand homework by asking guiding questions and providing hints. Do not give direct answers.";
-
-            // Append user message to history
-            history.push({ role: 'user', content: userMessage });
-
-            // Keep only the last 10 messages (to avoid API overload)
-            if (history.length > 10) history.shift();
-
-            try {
-                // Send history along with new message
-                const response = await axios.post(
-                    process.env.AI_API_URL,
-                    {
-                        model: 'google/gemma-3-4b-it:free',
-                        messages: [
-                            { role: 'system', content: homeworkContext },
-                            ...history, // Send previous messages for context
-                        ],
-                    },
-                    header
-                );
-
-                const aiMessage = response.data.choices[0].message.content;
-
-                // Append AI response to history
-                history.push({ role: 'assistant', content: aiMessage });
-                ws.send(JSON.stringify({ type: 'message', sender: 'Homework Helper', text: aiMessage }));
-                // Store updated history in Redis (expire after 5min)
-                redis.setex(sessionId, 300, JSON.stringify(history));
-
-
-            } catch (error) {
-                console.error('Error:', error.message);
-                ws.send('Error processing request');
+                console.error('Error processing message:', error);
+                ws.send(JSON.stringify({ type: 'error', message: 'Error processing request' }));
             }
         });
 
         ws.on('close', () => {
             console.log('Client disconnected');
-            sessionHistory.delete(ws); // Remove history when client disconnects
         });
     });
 }
