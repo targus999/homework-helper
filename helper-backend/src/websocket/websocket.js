@@ -52,9 +52,8 @@ function setupWebSocket(server) {
                 let history = historyString ? JSON.parse(historyString) : [];
 
                 // Define the context for AI response
-                const homeworkContext = "Solve the problems.";
+                const homeworkContext = "Introduce yourself as the homework helper that can help in solving  homeworks. for any questions instead of giving the answer help the student solve it by themself.";
 
-                let extractedTexts = [];
 
                 // Process all messages
                 for (const msg of parsedMessages) {
@@ -65,15 +64,13 @@ function setupWebSocket(server) {
                     if (msg.type === 'image_url' && msg.image_url) {
                         try {
                             const imageDataUri = `data:image/webp;base64,${msg.image_url}`;
-                            console.log("Processing Image OCR...");
                             const ocrResult = await Tesseract.recognize(imageDataUri, "eng");
                             const extractedText = ocrResult.data.text.trim();
                             
                             console.log("Extracted Text:", extractedText);
                             
                             if (extractedText) {
-                                extractedTexts.push(extractedText);
-                                history.push({ role: 'user', content: extractedText });
+                                history.push({ role: 'user', content: extractedText, filename:msg.filename });    /// add filename
                             }
                         } catch (err) {
                             console.error("OCR Error:", err);
@@ -85,7 +82,6 @@ function setupWebSocket(server) {
 
                 // **Wait until OCR extraction is done before calling AI API**
                 if (history.length > 0) {
-                    console.log('Sending to AI API:', history);
 
                     // Format messages for OpenRouter
                     const formattedMessages = [{ role: 'system', content: homeworkContext }, ...history];
@@ -100,7 +96,6 @@ function setupWebSocket(server) {
                         header
                     );
 
-                    console.log(response.data.choices);
                     if (response.data && response.data.choices && response.data.choices.length > 0) {
                         const aiMessage = response.data.choices[0].message.content;
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { FaPaperPlane, FaUpload, FaTimes } from 'react-icons/fa';
+import { CiFileOn } from "react-icons/ci";
 import './WebSocket.css';
 
 const WebSocketChat = () => {
@@ -23,7 +24,8 @@ const WebSocketChat = () => {
             if (data.type === 'history') {
                 setMessages(data.messages.map(msg => ({
                     sender: msg.role === 'user' ? 'You' : 'Homework Helper',
-                    text: msg.text
+                    text: msg.content,
+                    filename: msg.filename || null
                 })));
             } else if (data.type === 'message') {
                 setMessages(prev => [...prev, { sender: data.sender, text: data.text }]);
@@ -60,7 +62,7 @@ const WebSocketChat = () => {
                         ...prev,
                         ...payload.map(item => ({
                             sender: 'You',
-                            text: item.type === 'image_url' ? `📎 ${item.filename}` : item.content
+                            text: item.type === 'image_url' ? <div className='file-preview'><CiFileOn />{item.filename}</div> : item.text
                         }))
                     ]);
                 }
@@ -73,7 +75,7 @@ const WebSocketChat = () => {
                 const reader = new FileReader();
                 reader.onload = () => {
                     const base64String = reader.result.split(',')[1];
-                    payload.push({ type: 'image_url', image_url: base64String });
+                    payload.push({ type: 'image_url', image_url: base64String, filename: selectedFile.name });
                     sendPayload();
                 };
                 reader.readAsDataURL(selectedFile);
@@ -124,23 +126,9 @@ const WebSocketChat = () => {
                                 <ReactMarkdown>{msg.text}</ReactMarkdown>
                             ) : (
                                 (() => {
-                                    try {
-                                        console.log(msg.text);
-                                        return msg.text.map((value, i) => (
-                                            <div key={i}>
-                                                {value.type === 'image_url' ? (
-                                                    <img
-                                                        src={`data:image/png;base64,${value.image_url}`}
-                                                        alt={'preview'}
-                                                        style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '5px' }}
-                                                    />
-                                                ) : (
-                                                    <span>{value.content}</span>
-                                                )}
-                                            </div>
-                                        ));
-                                    } catch (error) {
-                                        // If parsing fails, assume it's plain text
+                                    if (msg.filename) {
+                                        return <div className='file-preview'><CiFileOn />{msg.filename}</div>
+                                    } else {
                                         return <span>{msg.text}</span>;
                                     }
                                 })()
@@ -183,7 +171,7 @@ const WebSocketChat = () => {
                     style={{ display: 'none' }}
                     id="file-upload"
                 />
-                <label htmlFor="file-upload" className="upload-button">
+                <label htmlFor="file-upload" accept="image/*" className="upload-button">
                     <FaUpload />
                 </label>
                 <button onClick={sendMessage} className="send-button" disabled={isTyping}>
