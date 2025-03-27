@@ -3,10 +3,12 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    height: 100vh;
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);
     transition: background 0.3s ease-in-out;
+    width: 100%;
+    min-height: 100vh; /* Let it expand naturally */
+    
 }
 
 /* Dark Mode */
@@ -18,12 +20,20 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 90%;
-    max-width: 60rem;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    backdrop-filter: blur(10px);
+    width: 100vw;
+    /* padding: 1rem 2rem; */
+    background: rgba(10, 10, 10); /* Darker background */
+    color: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    position: sticky;
+    top: 0;
+    z-index: 1000; /* Ensures it stays above other content */
+}
+
+.chat-header h2 {
+    padding-left: 2%;
+    font-size: 1.5rem;
+    font-weight: 600;
 }
 
 .theme-toggle {
@@ -41,31 +51,28 @@
 /* Chat Box */
 .chat-box {
     width: 90%;
+    min-height: 90vh;
     max-width: 60rem;
-    height: calc(91vh - 10rem);
-    background: white;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    border-radius: 10px;
     padding: 1rem;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+    box-sizing: border-box; /* Ensure padding doesn't increase width */
 }
 
-.chat-container.dark .chat-box {
-    background: #333;
-    color: white;
-}
+
 
 /* Messages */
 .messages-container {
-    flex: 1;
-    overflow-y: auto;
+    flex-grow: 1;
     padding: 1rem;
     border-bottom: 1px solid #ddd;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    max-width: 100%;
+    overflow-wrap: break-word; /* Prevents text from causing overflow */
+    word-wrap: break-word;
 }
 
 .message {
@@ -117,12 +124,13 @@
     align-items: center;
     width: 90%;
     max-width: 60rem;
-    position: fixed;
-    bottom: 1rem;
     background: white;
+    border: 2px solid #ddd;
     padding: 0.75rem;
     border-radius: 10px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    bottom: 0;
 }
 
 .chat-container.dark .input-container {
@@ -153,6 +161,25 @@
     background: #2563eb;
 }
 
+.upload-button {
+    background: white;
+    color: #3b82f6; /* Same blue as send button */
+    border: 2px solid #3b82f6; /* Border to match the color */
+    padding: 0.75rem;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    transition: background 0.3s, border-color 0.3s;
+}
+
+.upload-button:hover {
+    background: #f3f4f6; /* Light grey on hover */
+}
 /* File Preview */
 .file-preview {
     display: flex;
