@@ -20,7 +20,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 100vw;
+    width: 100%;
     /* padding: 1rem 2rem; */
     background: rgba(10, 10, 10); /* Darker background */
     color: white;
@@ -58,6 +58,8 @@
     flex-direction: column;
     overflow-x: hidden; /* Prevent horizontal scrolling */
     box-sizing: border-box; /* Ensure padding doesn't increase width */
+    flex: 1; /* Ensures it expands to take available space */
+    overflow-y: auto; /* Allows vertical scrolling inside the chat box */
 }
 
 
@@ -127,10 +129,11 @@
     background: white;
     border: 2px solid #ddd;
     padding: 0.75rem;
+    /* margin: 0.75rem; */
     border-radius: 10px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     position: sticky;
-    bottom: 0;
+    bottom: 1vh;
 }
 
 .chat-container.dark .input-container {
