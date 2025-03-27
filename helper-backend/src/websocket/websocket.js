@@ -63,17 +63,20 @@ function setupWebSocket(server) {
 
                     if (msg.type === 'image_url' && msg.image_url) {
                         try {
-                            const imageDataUri = `data:image/webp;base64,${msg.image_url}`;
+                            const mimeType = msg.filename?.endsWith(".png") ? "image/png" : "image/jpeg";
+                            const imageDataUri = `data:${mimeType};base64,${msg.image_url}`;
                             const ocrResult = await Tesseract.recognize(imageDataUri, "eng");
                             const extractedText = ocrResult.data.text.trim();
-                            
+
                             console.log("Extracted Text:", extractedText);
-                            
+
                             if (extractedText) {
-                                history.push({ role: 'user', content: extractedText, filename:msg.filename });    /// add filename
+                                history.push({ role: 'user', content: extractedText, filename: msg.filename });    /// add filename
                             }
                         } catch (err) {
+                            ws.send(JSON.stringify({ type: 'message', message: 'Failed to process the image.' }));
                             console.error("OCR Error:", err);
+
                         }
                     }
                 }

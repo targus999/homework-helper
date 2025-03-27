@@ -166,12 +166,13 @@ const WebSocketChat = () => {
                 <input
                     type="file"
                     onChange={handleFileUpload}
+                    accept="image/png, image/jpeg, image/webp"
                     ref={fileInputRef}
                     className="file-upload"
                     style={{ display: 'none' }}
                     id="file-upload"
                 />
-                <label htmlFor="file-upload" accept="image/*" className="upload-button">
+                <label htmlFor="file-upload" className="upload-button">
                     <FaUpload />
                 </label>
                 <button onClick={sendMessage} className="send-button" disabled={isTyping}>
